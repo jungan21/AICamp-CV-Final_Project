@@ -13,6 +13,7 @@ cp /path/to/unzip/dir/* recognize/facenet_model
 ### For Docker users
 
 First, build the docker container.
+https://docs.docker.com/engine/reference/commandline/build/#build-with-path
 
 ```
 docker build -t face .
