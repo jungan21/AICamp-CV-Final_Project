@@ -134,7 +134,7 @@ def get_score():
         img1 = cv2.imdecode(np.fromstring(files1.read(), np.uint8), cv2.IMREAD_COLOR)
         img2 = cv2.imdecode(np.fromstring(files2.read(), np.uint8), cv2.IMREAD_COLOR)
         
-        result, score = calc_score_with_version2_detector(img1, img2)
+        result, score = calc_score(img1, img2)
         return jsonify(result=result, score=score)
 
         
