@@ -94,7 +94,8 @@ def calc_score(img1, img2):
     
     faces1 = mtcnn_detector.get_face_from_single_image(img1)
     faces2 = mtcnn_detector.get_face_from_single_image(img2)
-
+    
+    # 强制 确保 两张图片里只有1个人
     if len(faces1) != 1 or len(faces2) != 1:
         return 'Please upload image with exact one person.', 0
 
@@ -112,10 +113,12 @@ def calc_score_with_version2_detector(img1, img2):
     
     faces1 = detect_face_by_caffemodel(img1)
     faces2 = detect_face_by_caffemodel(img2)
-
+    
+    
     if len(faces1) != 1 or len(faces2) != 1:
         return 'Please upload image with exact one person.', 0
 
+    # embeding
     emb1 = face_net.predict(faces1[0])
     emb2 = face_net.predict(faces2[0])
 
