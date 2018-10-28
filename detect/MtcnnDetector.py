@@ -100,14 +100,19 @@ class MtcnnDetector(object):
             return np.array([])
         #offset
         dx1, dy1, dx2, dy2 = [reg[t_index[0], t_index[1], i] for i in range(4)]
-
+        # 相当于 如何修正 bounding box 位置
         reg = np.array([dx1, dy1, dx2, dy2])
         score = cls_map[t_index[0], t_index[1]]
+        # feature map （也就是PNET FCN 输出的热度图） 上的点 映射 到原图 中的位置
+        # / scale, 就得到原图中相对大一点的框
         boundingbox = np.vstack([np.round((stride * t_index[1]) / scale),
                                  np.round((stride * t_index[0]) / scale),
+                                 # 左上角加 12 就是右下角
                                  np.round((stride * t_index[1] + cellsize) / scale),
                                  np.round((stride * t_index[0] + cellsize) / scale),
+                                 # bounding box得分
                                  score,
+                                 # how to adjust bounding box
                                  reg])
 
         return boundingbox.T
@@ -189,15 +194,24 @@ class MtcnnDetector(object):
         boxes_c: numpy array
             boxes after calibration
         """
-        # 需要图像金字塔
-        
-        
+        ''' 
+        1. 需要做图像金字塔
+        2 对图像金字塔的每一层图像 用FCN去predict
+        3. 把FCN的结果转换成一个list 的box
+        4. NMS + adjust
+        '''
+        # h, w , c 高 宽 channel个数      
         h, w, c = im.shape
-        net_size = 12
         
+        # 图像金字塔  start
+        # app.py原始参数： min_face_size 是24
+        net_size = 12
+        # 找到 这里12 和 原始参数要求24的最小的要求 的scale
         current_scale = float(net_size) / self.min_face_size  # find initial scale
         # print("current_scale", net_size, self.min_face_size, current_scale)
+        # 按比例放缩
         im_resized = self.processed_image(im, current_scale)
+        # 这里得到了 图像金字塔 最下面那张最大的图片
         current_height, current_width, _ = im_resized.shape
         # fcn
         all_boxes = list()
@@ -205,8 +219,13 @@ class MtcnnDetector(object):
             #return the result predicted by pnet
             #cls_cls_map : H*w*2
             #reg: H*w*4
+            # cls_prob, bbox_pred  (heat map)
             cls_cls_map, reg = self.pnet_detector.predict(im_resized)
             #boxes: num*9(x1,y1,x2,y2,score,x1_offset,y1_offset,x2_offset,y2_offset)
+            # cls_cls_map 也就是 cls_prob...cls_cls_map[:, :,1] 只拿出是人脸的box,
+            # reg bound box pred.
+            # thresh[0] pnet 的 threshold
+            # 这里生成的bound boxes... 可能会有重合 重叠
             boxes = self.generate_bbox(cls_cls_map[:, :,1], reg, current_scale, self.thresh[0])
 
             current_scale *= self.scale_factor
