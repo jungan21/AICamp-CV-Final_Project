@@ -20,6 +20,7 @@ from recognize.facenet import FaceNet
 
 
 # Init MtcnnDetector
+# pnet, rnet, onet 的threshold, 只有大于多少才会认为是人脸
 thresh = [0.9, 0.6, 0.7]
 min_face_size = 24
 stride = 2
