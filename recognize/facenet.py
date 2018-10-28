@@ -49,7 +49,7 @@ class FaceNet(object):
         images_placeholder = self.sess.graph.get_tensor_by_name("input:0")
         embeddings = self.sess.graph.get_tensor_by_name("embeddings:0")
         phase_train_placeholder = self.sess.graph.get_tensor_by_name("phase_train:0")
-
+        # 因为最后FC。。所以size  要固定
         image = cv2.resize(image, (160, 160))
         # Run forward pass to calculate embeddings
         feed_dict = { images_placeholder: np.stack([image]), phase_train_placeholder:False }
