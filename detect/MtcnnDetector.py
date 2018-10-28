@@ -195,10 +195,10 @@ class MtcnnDetector(object):
             boxes after calibration
         """
         ''' 
-        1. 需要做图像金字塔
-        2 对图像金字塔的每一层图像 用FCN去predict
+        1. 需要做图像金字塔，图像金字塔是用来帮助PNET得到各种大小不同 在不同尺度的proposal
+        2. 对图像金字塔的每一层图像 用FCN去做PNET的predict。还需要对PNET全卷积生成的heatmap上生成proposal
         3. 把FCN的结果转换成一个list 的box
-        4. NMS + adjust
+        4. 对所有proposal 做 NMS + 让后在根据predict 出来调整的方法（变量名：reg_）去adjust一下
         '''
         # h, w , c 高 宽 channel个数      
         h, w, c = im.shape
@@ -275,9 +275,9 @@ class MtcnnDetector(object):
         Returns:
         -------
         boxes: numpy array
-            detected boxes before calibration
+            detected boxes before calibration， 未修正过的 24 * 24 的图片
         boxes_c: numpy array
-            boxes after calibration
+            boxes after calibration 修正过的 24 * 24 的图片
         """
         h, w, c = im.shape
         # 把长方形 convert to 正方形 防止后面 24*24 resize 时候形变
@@ -288,17 +288,23 @@ class MtcnnDetector(object):
         [dy, edy, dx, edx, y, ey, x, ex, tmpw, tmph] = self.pad(dets, w, h)
         num_boxes = dets.shape[0]
         cropped_ims = np.zeros((num_boxes, 24, 24, 3), dtype=np.float32)
+       
+         # 抠图 并resize 投 24 * 24 的框
         for i in range(num_boxes):
             tmp = np.zeros((tmph[i], tmpw[i], 3), dtype=np.uint8)
+            #抠图
             tmp[dy[i]:edy[i] + 1, dx[i]:edx[i] + 1, :] = im[y[i]:ey[i] + 1, x[i]:ex[i] + 1, :]
-            # resize 成 24 * 24
+            # 再把抠出来的图 resize 成 24 * 24
             cropped_ims[i, :, :, :] = (cv2.resize(tmp, (24, 24))-127.5) / 128
         #cls_scores : num_data*2
         #reg: num_data*4
         #landmark: num_data*10
+        # predict 抠出来的 24 * 24 的图片
         cls_scores, reg, _ = self.rnet_detector.predict(cropped_ims)
         cls_scores = cls_scores[:,1]
+        # 只有大于 RNET threshold才会被认为是人脸 送给ONET
         keep_inds = np.where(cls_scores > self.thresh[1])[0]
+        # 组织一下
         if len(keep_inds) > 0:
             boxes = dets[keep_inds]
             boxes[:, 4] = cls_scores[keep_inds]
@@ -307,7 +313,7 @@ class MtcnnDetector(object):
         else:
             return None, None, None
         
-        # npm 非极大值压制
+        # npm 非极大值压制，IOU的threshold 0.6
         keep = py_nms(boxes, 0.6)
         boxes = boxes[keep]
         # 调整 box
@@ -380,6 +386,7 @@ class MtcnnDetector(object):
         # pnet
         t1 = 0
         if self.pnet_detector:
+            #这里调用detect_pnet的时候，并没有做图像金字塔。。。但实际上图像金字塔是在detect_pnet里做的
             boxes, boxes_c,_ = self.detect_pnet(img)
             if boxes_c is None:
                 return np.array([]),np.array([])
