@@ -25,6 +25,7 @@ class FcnDetector(object):
             self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=tf.GPUOptions(allow_growth=True)))
             saver = tf.train.Saver()
             #check whether the dictionary is valid
+            #读取训练好的模型参数
             model_dict = '/'.join(model_path.split('/')[:-1])
             ckpt = tf.train.get_checkpoint_state(model_dict)
             print model_path
@@ -35,6 +36,8 @@ class FcnDetector(object):
     def predict(self, databatch):
         height, width, _ = databatch.shape
         # print(height, width)
+        # 直接把读取的batch 图片 扔给 model
+        # 下面两个返回值 都是二位数组
         cls_prob, bbox_pred = self.sess.run([self.cls_prob, self.bbox_pred],
                                                            feed_dict={self.image_op: databatch, self.width_op: width,
                                                                       self.height_op: height})
