@@ -189,6 +189,9 @@ class MtcnnDetector(object):
         boxes_c: numpy array
             boxes after calibration
         """
+        # 需要图像金字塔
+        
+        
         h, w, c = im.shape
         net_size = 12
         
@@ -258,15 +261,18 @@ class MtcnnDetector(object):
             boxes after calibration
         """
         h, w, c = im.shape
+        # 把长方形 convert to 正方形 防止后面 24*24 resize 时候形变
         dets = self.convert_to_square(dets)
         dets[:, 0:4] = np.round(dets[:, 0:4])
 
+        # 先抠出来， 再24 * 24 的resize boxes
         [dy, edy, dx, edx, y, ey, x, ex, tmpw, tmph] = self.pad(dets, w, h)
         num_boxes = dets.shape[0]
         cropped_ims = np.zeros((num_boxes, 24, 24, 3), dtype=np.float32)
         for i in range(num_boxes):
             tmp = np.zeros((tmph[i], tmpw[i], 3), dtype=np.uint8)
             tmp[dy[i]:edy[i] + 1, dx[i]:edx[i] + 1, :] = im[y[i]:ey[i] + 1, x[i]:ex[i] + 1, :]
+            # resize 成 24 * 24
             cropped_ims[i, :, :, :] = (cv2.resize(tmp, (24, 24))-127.5) / 128
         #cls_scores : num_data*2
         #reg: num_data*4
@@ -282,9 +288,10 @@ class MtcnnDetector(object):
         else:
             return None, None, None
         
-        
+        # npm 非极大值压制
         keep = py_nms(boxes, 0.6)
         boxes = boxes[keep]
+        # 调整 box
         boxes_c = self.calibrate_box(boxes, reg[keep])
         return boxes, boxes_c,None
 
@@ -388,12 +395,13 @@ class MtcnnDetector(object):
     
     
     def get_face_from_single_image(self, image):
+        # 把一个batch 的 image 数组化 （在我们的例子中，实际只有一张）
         images = np.array(image)
         
         boxes_c,landmarks = self.detect(images)
         
         rets = []
-        
+        # ???
         for i in range(boxes_c.shape[0]):
             bbox = boxes_c[i, :4]
             corpbbox = [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])]
