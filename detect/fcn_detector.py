@@ -38,4 +38,6 @@ class FcnDetector(object):
         cls_prob, bbox_pred = self.sess.run([self.cls_prob, self.bbox_pred],
                                                            feed_dict={self.image_op: databatch, self.width_op: width,
                                                                       self.height_op: height})
+        # 分类的结果， 和 bounding box
+        # 对于 Pnet, Rnet, landmark 只是辅助达到multi task CNN.而不输出。。只有最后的ONet输出landmark
         return cls_prob, bbox_pred
