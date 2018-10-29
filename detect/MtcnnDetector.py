@@ -78,8 +78,10 @@ class MtcnnDetector(object):
         ----------
             cls_map: numpy array , n x m 
                 detect score for each position
+                也就是heat map
             reg: numpy array , n x m x 4
-                bbox
+                bbox 
+                调整bounding box 的位置
             scale: float number
                 scale of this detection
             threshold: float number
@@ -92,19 +94,21 @@ class MtcnnDetector(object):
         #stride = 4
         cellsize = 12
         #cellsize = 25
-
+        # 得分 大于threshold的 二维的位置拿出来
         t_index = np.where(cls_map > threshold)
 
         # find nothing
         if t_index[0].size == 0:
             return np.array([])
+        
+        # 该如何修正 bounding box 位置
         #offset
         dx1, dy1, dx2, dy2 = [reg[t_index[0], t_index[1], i] for i in range(4)]
-        # 相当于 如何修正 bounding box 位置
         reg = np.array([dx1, dy1, dx2, dy2])
         score = cls_map[t_index[0], t_index[1]]
         # feature map （也就是PNET FCN 输出的热度图） 上的点 映射 到原图 中的位置
         # / scale, 就得到原图中相对大一点的框
+        # 根据heat map中二维坐标的bounding box位置得到原图的中的bounding box
         boundingbox = np.vstack([np.round((stride * t_index[1]) / scale),
                                  np.round((stride * t_index[0]) / scale),
                                  # 左上角加 12 就是右下角
@@ -123,7 +127,7 @@ class MtcnnDetector(object):
         new_width = int(width * scale)  # resized new width
         new_dim = (new_width, new_height)
         img_resized = cv2.resize(img, new_dim, interpolation=cv2.INTER_LINEAR)  # resized image
-        img_resized = (img_resized - 127.5) / 128
+        img_resized = (img_resized - 127.5) / 128 # 图像里每个像素[0, 255] -> (-127.5) [-127.5, 127.5] -> [-1, -1]归一化
         return img_resized
 
     def pad(self, bboxes, w, h):
@@ -197,61 +201,79 @@ class MtcnnDetector(object):
         ''' 
         1. 需要做图像金字塔，图像金字塔是用来帮助PNET得到各种大小不同 在不同尺度的proposal
         2. 对图像金字塔的每一层图像 用FCN去做PNET的predict。还需要对PNET全卷积生成的heatmap上生成proposal
-        3. 把FCN的结果转换成一个list 的box
-        4. 对所有proposal 做 NMS + 让后在根据predict 出来调整的方法（变量名：reg_）去adjust一下
+        3. 把FCN的predict结果转换成一个list 的bounding box
+        4. 对所有proposal 做 NMS + 然后再根据predict 出来结果调整box（变量名：reg_）去adjust一下
+        5. NOTE: PNET, RNET 不返回 landmark, 只有最后的ONET 返回landmark
         '''
-        # h, w , c 高 宽 channel个数      
+        # h, w , c 高 宽 channel个数 (厚度)      
+        # h, w will be used to build 图像金字塔
         h, w, c = im.shape
         
         # 图像金字塔  start
-        # app.py原始参数： min_face_size 是24
+        # app.py原始参数： min_face_size 是24 也就是规定最小的人脸的size
+        # 12 * 12 的 bounding box
         net_size = 12
         # 找到 这里12 和 原始参数要求24的最小的要求 的scale
         current_scale = float(net_size) / self.min_face_size  # find initial scale
         # print("current_scale", net_size, self.min_face_size, current_scale)
-        # 按比例放缩
+        # 按比例放缩,能满足最小人脸的要求
         im_resized = self.processed_image(im, current_scale)
-        # 这里得到了 图像金字塔 最下面那张最大的图片
+        # 这里得到了 图像金字塔 最下面那张最大的图片 （不需要通道数 所以最后一个 _）
         current_height, current_width, _ = im_resized.shape
         # fcn
         all_boxes = list()
+        # 拿到了图像金字塔最下面的最大的图片后，循环得到真个图像金字塔
+        # while loop 结束后，就表示，把所有图像金字塔里的图片都送进去PNET 跑了一遍，并且拿到了bounding box 
         while min(current_height, current_width) > net_size:
+            # 图像金字塔每一层的图片 去抠出bounding box - start 
             #return the result predicted by pnet
             #cls_cls_map : H*w*2
             #reg: H*w*4
-            # cls_prob, bbox_pred  (heat map)
+            # cls_prob, bbox_pred  (heat map) 这是 pnet_detector.predict 函数返回的结果
             cls_cls_map, reg = self.pnet_detector.predict(im_resized)
             #boxes: num*9(x1,y1,x2,y2,score,x1_offset,y1_offset,x2_offset,y2_offset)
             # cls_cls_map 也就是 cls_prob...cls_cls_map[:, :,1] 只拿出是人脸的box,
             # reg bound box pred.
             # thresh[0] pnet 的 threshold
             # 这里生成的bound boxes... 可能会有重合 重叠
+            # cls_cls_map[:, :,1]:  意思是 把classficiation 中 是人脸的概率拿出来 用来生成bounding box
             boxes = self.generate_bbox(cls_cls_map[:, :,1], reg, current_scale, self.thresh[0])
-
+            #图像金字塔每一层的图片 去抠出bounding box - end
+            
+            # generate 整个图像金字塔的图片， 用最小面那个最大的图片每次scale 缩小一定比例（i.e.scale_factor）- start 
             current_scale *= self.scale_factor
             im_resized = self.processed_image(im, current_scale)
             current_height, current_width, _ = im_resized.shape
+            # generate 整个图像金字塔的图片， 用最小面那个最大的图片每次scale 缩小一定比例（i.e.scale_factor）- end
 
             if boxes.size == 0:
                 continue
+            # generate_bbox 返回的boxes一共9个参数（左上，右下坐标， score, reg(4个参数)）这里只要前5个参数：左上，右下 坐标，score 5个参数
+            # A B 的交集 除以 AB的并集 ，求AB得nms
             keep = py_nms(boxes[:, :5], 0.5, 'Union')
             boxes = boxes[keep]
             all_boxes.append(boxes)
 
+        
         if len(all_boxes) == 0:
             return None, None, None
 
         all_boxes = np.vstack(all_boxes)
-
+        
+        # 下面需要对 while 循环 得到的bounding box 在做nms 不过这次threshold是 0.7，while loop里是0.5 
         # merge the detection from first stage
         keep = py_nms(all_boxes[:, 0:5], 0.7, 'Union')
         all_boxes = all_boxes[keep]
+        
         boxes = all_boxes[:, :5]
-
+       
+        # 相当于 x2- x1得到宽
+        bbw = all_boxes[:, 2] - all_boxes[:, 0] + 1 
+        # 相当于 y2- y1得到高
         bbw = all_boxes[:, 2] - all_boxes[:, 0] + 1
-        bbh = all_boxes[:, 3] - all_boxes[:, 1] + 1
 
-        # refine the boxes
+        # refine the boxes 根据reg 的4个值 (也就是对应的 all_boxes[:, 5]，all_boxes[:, 6] all_boxes[:, 7]all_boxes[:, 8]) 
+        # 去调整 bounding box。 NOTE: all_boxes[:, 4] 是 bounding box的score （根据generat_box函数返回值）
         boxes_c = np.vstack([all_boxes[:, 0] + all_boxes[:, 5] * bbw,
                              all_boxes[:, 1] + all_boxes[:, 6] * bbh,
                              all_boxes[:, 2] + all_boxes[:, 7] * bbw,
