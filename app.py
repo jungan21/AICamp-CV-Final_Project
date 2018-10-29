@@ -109,6 +109,7 @@ def calc_score(img1, img2):
     else:
         return 'Not same person', str(score)
 
+# train facenet用的 MTCNN
 def calc_score_with_version2_detector(img1, img2):
     thresh = 0.8
     
