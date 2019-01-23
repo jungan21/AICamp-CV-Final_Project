@@ -18,12 +18,12 @@ https://docs.docker.com/engine/reference/commandline/build/#build-with-path
 ```
 docker build -t face .
 
-(base) s4467575@wkstncontrols-MacBook-Pro:~/Documents/Jun/jiuzhang_AI/projects/AICamp-CV-Final_Project$docker image ls
-REPOSITORY                                              TAG                 IMAGE ID            CREATED             SIZE
-face                                                    latest              3004e6b02801        6 minutes ago       1.68GB
-python                                                  2.7                 3c43a5d4034a        10 days ago         908MB
-jungan21/colt_demo                                      latest              9049e86c2dbf        2 months ago        119MB
-jungan21/springiojun/colt_demo                          0.1-SNAPSHOT        9049e86c2dbf        2 months ago        119MB
+(base) s4467575@Jun-Gan-Macbook:~/Documents/jun/AI/deep_learning/Object_Facce_Detection_Recognition/face_recognition_FaceNet/projects/Face_Recognition_System_jiuzhang$docker build -t face .
+
+(base) s4467575@Jun-Gan-Macbook:~/Documents/jun/AI/deep_learning/Object_Facce_Detection_Recognition/face_recognition_FaceNet/projects/Face_Recognition_System_jiuzhang$docker image ls
+REPOSITORY          TAG                 IMAGE ID            CREATED             SIZE
+face                latest              2be5ba22d3f3        4 minutes ago       1.89GB
+python              2.7                 6f80c4b7a3c3        3 hours ago         912MB
 
 ```
 
@@ -32,9 +32,9 @@ Then, spin up docker container and run the docker image (i.e. face).
 ```
 docker run -it -p 5000:5000 face python app.py
 
-(base) s4467575@wkstncontrols-MacBook-Pro:~/Documents/Jun/jiuzhang_AI/projects/AICamp-CV-Final_Project$docker container ls
-CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS                    NAMES
-6e20d688b8e7        face                "python app.py"     2 minutes ago       Up About a minute   0.0.0.0:5000->5000/tcp   priceless_meninsky
+(base) s4467575@Jun-Gan-Macbook:~/Documents/jun/AI/deep_learning/Object_Facce_Detection_Recognition/face_recognition_FaceNet/projects/Face_Recognition_System_jiuzhang$docker container ls
+CONTAINER ID        IMAGE               COMMAND             CREATED             STATUS              PORTS               NAMES
+
 ```
 
 ### For other users

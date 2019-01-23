@@ -1,3 +1,4 @@
+#coding:utf-8
 import cv2
 import numpy as np
 import os
@@ -20,7 +21,7 @@ from recognize.facenet import FaceNet
 
 
 # Init MtcnnDetector
-# pnet, rnet, onet 的threshold, 只有大于多少才会认为是人脸
+# pnet, rnet, onet's threshold. Only if the number > threshold, we consider this as people's face
 thresh = [0.9, 0.6, 0.7]
 min_face_size = 24
 stride = 2
@@ -96,7 +97,7 @@ def calc_score(img1, img2):
     faces1 = mtcnn_detector.get_face_from_single_image(img1)
     faces2 = mtcnn_detector.get_face_from_single_image(img2)
     
-    # 强制 确保 两张图片里只有1个人
+    # force and ensure two images only contain 1 person
     if len(faces1) != 1 or len(faces2) != 1:
         return 'Please upload image with exact one person.', 0
 
@@ -109,7 +110,7 @@ def calc_score(img1, img2):
     else:
         return 'Not same person', str(score)
 
-# train facenet用的 MTCNN
+# MTCNN use to train facenet
 def calc_score_with_version2_detector(img1, img2):
     thresh = 0.8
     
