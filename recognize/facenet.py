@@ -19,7 +19,15 @@ class FaceNet(object):
             
             print('Metagraph file: %s' % meta_file)
             print('Checkpoint file: %s' % ckpt_file)
-          
+
+            """
+                对于facenet, 这里我们用了下面的语句直接import graph , 所以不用像mtcnn那样，再需要写个mtcnn_model.py. 
+                否则我们也需要写一个类似的facenet_model.py 来定义graph
+                
+                但是从别人train好的model直接导入graph有一点不好，就是在predict (做一次前向传播)需要参考别人的源代码里是如何定义graph的，要知道input output是什么                                  
+            """
+
+            # 从*.meta 文件里直接load graph
             saver = tf.train.import_meta_graph(os.path.join(model_path, meta_file), input_map=None)
             # 把每一个卷积 每一个全连接 和 ckpt_file中的对应的参数 binding 起来
             saver.restore(self.sess, os.path.join(model_path, ckpt_file))
@@ -65,10 +73,12 @@ class FaceNet(object):
             the embedding vector of the face
         """
         #这里的input, embeddings 对应 于 facenet模型 定义时候的名字
-        # https://github.com/davidsandberg/facenet/blob/master/src/train_tripletloss.py#L136
+        # 因为对于facenet我们直接导入的graph, 所以不知道要feed 什么，所以要参考facenet源代码里如何构建graph的
         
         # 0 表示第0个output
+        # https://github.com/davidsandberg/facenet/blob/master/src/train_tripletloss.py#L128
         images_placeholder = self.sess.graph.get_tensor_by_name("input:0")
+        # https://github.com/davidsandberg/facenet/blob/master/src/train_tripletloss.py#L136
         embeddings = self.sess.graph.get_tensor_by_name("embeddings:0")
         phase_train_placeholder = self.sess.graph.get_tensor_by_name("phase_train:0")
         # 因为最后要Fully Connected Layer。。所以size  要固定

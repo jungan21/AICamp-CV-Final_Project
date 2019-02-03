@@ -20,25 +20,27 @@ class FcnDetector(object):
             #construct model here
             #self.cls_prob, self.bbox_pred = net_factory(image_reshape, training=False)
             #contains landmark
+            # net_factory： 传入的网络结构
             self.cls_prob, self.bbox_pred, _ = net_factory(image_reshape, training=False)
             
             #allow 
             self.sess = tf.Session(config=tf.ConfigProto(allow_soft_placement=True, gpu_options=tf.GPUOptions(allow_growth=True)))
             saver = tf.train.Saver()
             #check whether the dictionary is valid
-            #读取训练好的模型参数
+            #load 训练好的model, 读取训练好的模型参数
             model_dict = '/'.join(model_path.split('/')[:-1])
             ckpt = tf.train.get_checkpoint_state(model_dict)
             print model_path
             readstate = ckpt and ckpt.model_checkpoint_path
             assert  readstate, "the params dictionary is not valid"
             print "restore models' param"
+            # 把model 里的参数 set  到session里面
             saver.restore(self.sess, model_path)
     def predict(self, databatch):
         height, width, _ = databatch.shape
         # print(height, width)
         # 直接把读取的batch 图片 扔给 model
-        # 下面两个返回值 都是二位数组
+        # 下面两个返回值 都是二维数组
         cls_prob, bbox_pred = self.sess.run([self.cls_prob, self.bbox_pred],
                                                            feed_dict={self.image_op: databatch, self.width_op: width,
                                                                       self.height_op: height})

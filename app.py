@@ -1,4 +1,5 @@
 #coding:utf-8
+# 该文件相当于web server application的server 端
 import cv2
 import numpy as np
 import os
@@ -20,7 +21,7 @@ from detect_acc import detect_face
 from recognize.facenet import FaceNet
 
 
-# Init MtcnnDetector
+# Init MtcnnDetector 这里是我们九章课上自己train 的MTCNN model
 # pnet, rnet, onet's threshold. Only if the number > threshold, we consider this as people's face
 thresh = [0.9, 0.6, 0.7]
 min_face_size = 24
@@ -41,7 +42,7 @@ mtcnn_detector = MtcnnDetector(detectors=detectors, min_face_size=min_face_size,
                                stride=stride, threshold=thresh, slide_window=slide_window)
 
 
-# Init another version of MtcnnDetector
+# Init another version of MtcnnDetector. 别人train Facenet的时候用的MTCNN model
 print('Creating networks and loading parameters')
 minsize = 20 # minimum size of face
 threshold = [ 0.6, 0.7, 0.7 ]  # three steps's threshold
@@ -86,21 +87,26 @@ face_net = FaceNet(model_path)
 app = Flask(__name__)
 bootstrap = Bootstrap(app)
 
+# server 端 默认render 的主页
 @app.route('/')
 def index():
     return render_template('index.html')
     
-    
+
+#
 def calc_score(img1, img2):
     thresh = 0.35
-    
+
+    # MTCNN 抠出人脸来. Note: 这里返回的 faces1, faces2 都输数组类型
     faces1 = mtcnn_detector.get_face_from_single_image(img1)
     faces2 = mtcnn_detector.get_face_from_single_image(img2)
     
-    # force and ensure two images only contain 1 person
+    # 保证每张上传的图片里仅仅包含一张人脸
     if len(faces1) != 1 or len(faces2) != 1:
         return 'Please upload image with exact one person.', 0
 
+    # NOTE: 这里face_net model  用的是别人train 好的model. 别人train facenet的时候也会用到MTCNN (别人的)model
+    # 而这个 calc_score这个方法里 的MTCNN是我们课上自己train的model
     emb1 = face_net.predict(faces1[0])
     emb2 = face_net.predict(faces2[0])
 
@@ -110,7 +116,7 @@ def calc_score(img1, img2):
     else:
         return 'Not same person', str(score)
 
-# MTCNN use to train facenet
+# MTCNN use to train facenet 的时候用的MTCNN
 def calc_score_with_version2_detector(img1, img2):
     thresh = 0.8
     
@@ -131,7 +137,7 @@ def calc_score_with_version2_detector(img1, img2):
     else:
         return 'Not same person', str(score)
     
-    
+# server 端 接收到upload event后
 @app.route('/get_score', methods=['POST'])
 def get_score():
     if request.method == 'POST':
@@ -140,11 +146,11 @@ def get_score():
         img1 = cv2.imdecode(np.fromstring(files1.read(), np.uint8), cv2.IMREAD_COLOR)
         img2 = cv2.imdecode(np.fromstring(files2.read(), np.uint8), cv2.IMREAD_COLOR)
         
-        result, score = calc_score(img1, img2)
+        result, score = calc_score_with_version2_detector(img1, img2)
         return jsonify(result=result, score=score)
 
         
 
-
+# server 端的入口
 if __name__ == "__main__":
     app.run(host='0.0.0.0')

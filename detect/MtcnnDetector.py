@@ -20,11 +20,11 @@ class MtcnnDetector(object):
         self.pnet_detector = detectors[0]
         self.rnet_detector = detectors[1]
         self.onet_detector = detectors[2]
-        self.min_face_size = min_face_size
+        self.min_face_size = min_face_size # 比这个size 小的图片都会被ignore掉
         self.stride = stride
         self.thresh = threshold
-        self.scale_factor = scale_factor
-        self.slide_window = slide_window
+        self.scale_factor = scale_factor # 生成图像金字塔的用的scale_factor
+        self.slide_window = slide_window # False：表示PNET 用FCN,  True:表示 用slide window生成
 
     def convert_to_square(self, bbox):
         """
@@ -95,7 +95,7 @@ class MtcnnDetector(object):
         #stride = 4
         cellsize = 12
         #cellsize = 25
-        # 得分 大于threshold的 二维的位置拿出来
+        # 得分 大于threshold的 二维的位置下标拿出来
         t_index = np.where(cls_map > threshold)
 
         # find nothing
@@ -108,8 +108,10 @@ class MtcnnDetector(object):
         reg = np.array([dx1, dy1, dx2, dy2])
         score = cls_map[t_index[0], t_index[1]]
         # feature map （也就是PNET FCN 输出的热度图） 上的点 映射 到原图 中的位置
-        # / scale, 就得到原图中相对大一点的框
+        # 除以 scale, 就得到原图中相对大一点的框
         # 根据heat map中二维坐标的bounding box位置得到原图的中的bounding box
+        # feature map上每一个小框都会对应 原图中 12 * 12的图
+        #  stride = 2 因为在 mtcnn_model.py里P_NET 里max_pooling 是2ao
         boundingbox = np.vstack([np.round((stride * t_index[1]) / scale),
                                  np.round((stride * t_index[0]) / scale),
                                  # 左上角加 12 就是右下角
@@ -121,7 +123,7 @@ class MtcnnDetector(object):
                                  reg])
 
         return boundingbox.T
-    #pre-process images
+    #pre-process images PNET 里做图像金字塔的时候用到
     def processed_image(self, img, scale):
         height, width, channels = img.shape
         new_height = int(height * scale)  # resized new height
@@ -212,10 +214,8 @@ class MtcnnDetector(object):
         
         # 图像金字塔  start
         # app.py原始参数： min_face_size 是24 也就是规定最小的人脸的size
-        # 12 * 12 的 bounding box
-        net_size = 12
-        # 找到 这里12 和 原始参数要求24的最小的要求 的scale
-        current_scale = float(net_size) / self.min_face_size  # find initial scale
+        net_size = 12 # 12 * 12 的 bounding box
+        current_scale = float(net_size) / self.min_face_size  # find initial scale。 找到 这里12 和 原始参数要求24的最小的要求 的scale
         # print("current_scale", net_size, self.min_face_size, current_scale)
         # 按比例放缩,能满足最小人脸的要求
         im_resized = self.processed_image(im, current_scale)
@@ -223,7 +223,7 @@ class MtcnnDetector(object):
         current_height, current_width, _ = im_resized.shape
         # fcn
         all_boxes = list()
-        # 拿到了图像金字塔最下面的最大的图片后，循环得到真个图像金字塔
+        # 拿到了图像金字塔最下面的最大的图片后，循环得到整个图像金字塔
         # while loop 结束后，就表示，把所有图像金字塔里的图片都送进去PNET 跑了一遍，并且拿到了bounding box 
         while min(current_height, current_width) > net_size:
             # 图像金字塔每一层的图片 去抠出bounding box - start 
@@ -231,6 +231,7 @@ class MtcnnDetector(object):
             #cls_cls_map : H*w*2
             #reg: H*w*4
             # cls_prob, bbox_pred  (heat map) 这是 pnet_detector.predict 函数返回的结果
+            # Note: 我们之前train好的model都是被pnet_dectect load 进来的 也就是在FcnDetector, 也就是fcn_detector.py里面
             cls_cls_map, reg = self.pnet_detector.predict(im_resized)
             #boxes: num*9(x1,y1,x2,y2,score,x1_offset,y1_offset,x2_offset,y2_offset)
             # cls_cls_map 也就是 cls_prob...cls_cls_map[:, :,1] 只拿出是人脸的box,
@@ -238,10 +239,15 @@ class MtcnnDetector(object):
             # thresh[0] pnet 的 threshold
             # 这里生成的bound boxes... 可能会有重合 重叠
             # cls_cls_map[:, :,1]:  意思是 把classficiation 中 是人脸的概率拿出来 用来生成bounding box
+
+            """
+                上面 self.pnet_detector.predict(im_resized) 实际上是对图像金字塔的图片做预测，拿到cls_cls_map, reg
+                但是我们generate 实际的 bounding box 还需要把图像金字塔里的图片，映射到原图中找出bounding box 
+            """
             boxes = self.generate_bbox(cls_cls_map[:, :,1], reg, current_scale, self.thresh[0])
             #图像金字塔每一层的图片 去抠出bounding box - end
             
-            # generate 整个图像金字塔的图片， 用最小面那个最大的图片每次scale 缩小一定比例（i.e.scale_factor）- start 
+            # generate 整个图像金字塔的图片， 用最下面那个最大的图片每次scale 缩小一定比例（i.e.scale_factor）- start
             current_scale *= self.scale_factor
             im_resized = self.processed_image(im, current_scale)
             current_height, current_width, _ = im_resized.shape
@@ -250,10 +256,11 @@ class MtcnnDetector(object):
             if boxes.size == 0:
                 continue
             # generate_bbox 返回的boxes一共9个参数（左上，右下坐标， score, reg(4个参数)）这里只要前5个参数：左上，右下 坐标，score 5个参数
-            # A B 的交集 除以 AB的并集 ，求AB得nms
+            # A B 的交集 除以 AB的并集 ，求AB得nms. 这里也就是 面积的交/面积的并
             keep = py_nms(boxes[:, :5], 0.5, 'Union')
             boxes = boxes[keep]
             all_boxes.append(boxes)
+            # 没while loop, 一次，就处理图像金字塔里的一层
 
         
         if len(all_boxes) == 0:
@@ -271,18 +278,18 @@ class MtcnnDetector(object):
         # 相当于 x2- x1得到宽
         bbw = all_boxes[:, 2] - all_boxes[:, 0] + 1 
         # 相当于 y2- y1得到高
-        bbw = all_boxes[:, 2] - all_boxes[:, 0] + 1
+        bbh = all_boxes[:, 2] - all_boxes[:, 0] + 1
 
-        # refine the boxes 根据reg 的4个值 (也就是对应的 all_boxes[:, 5]，all_boxes[:, 6] all_boxes[:, 7]all_boxes[:, 8]) 
+        # refine the boxes 根据reg 的4个值 (也就是对应的 all_boxes[:, 5]，all_boxes[:, 6] all_boxes[:, 7]all_boxes[:, 8])
         # 去调整 bounding box。 NOTE: all_boxes[:, 4] 是 bounding box的score （根据generat_box函数返回值）
         boxes_c = np.vstack([all_boxes[:, 0] + all_boxes[:, 5] * bbw,
                              all_boxes[:, 1] + all_boxes[:, 6] * bbh,
                              all_boxes[:, 2] + all_boxes[:, 7] * bbw,
                              all_boxes[:, 3] + all_boxes[:, 8] * bbh,
-                             all_boxes[:, 4]])
-        boxes_c = boxes_c.T
+                             all_boxes[:, 4]]) # all_boxes[:, 4] 表示 score
+        boxes_c = boxes_c.T # 因为前面是vstack, 这里要装置一下
 
-        return boxes, boxes_c, None
+        return boxes, boxes_c, None # None表示不需要返回landmark
         
 
     def detect_rnet(self, im, dets):
@@ -450,8 +457,8 @@ class MtcnnDetector(object):
         boxes_c,landmarks = self.detect(images)
         
         rets = []
-        # ???
-        for i in range(boxes_c.shape[0]):
+        # ??? 这里实现没有用 landmarks 去做alignment
+        for i in range(boxes_c.shape[0]): # boxes_c.shape[0] 就是行数，就相当于是proposal的个数
             bbox = boxes_c[i, :4]
             corpbbox = [int(bbox[0]), int(bbox[1]), int(bbox[2]), int(bbox[3])]
             print(corpbbox)
