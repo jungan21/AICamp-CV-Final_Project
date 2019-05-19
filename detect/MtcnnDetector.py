@@ -10,10 +10,10 @@ class MtcnnDetector(object):
 
     def __init__(self,
                  detectors,
-                 min_face_size=25,
+                 min_face_size=25, # 如果图像size 小于25* 25 就ignore
                  stride=2,
                  threshold=[0.6, 0.7, 0.7],
-                 scale_factor=0.79,
+                 scale_factor=0.79, # 图像金字塔的放缩因子
                  #scale_factor=0.709,#change
                  slide_window=False):
 
@@ -197,7 +197,7 @@ class MtcnnDetector(object):
         Returns:
         -------
         boxes: numpy array
-            detected boxes before calibration
+            detected boxes before calibration (calibration 表示修正的意思)
         boxes_c: numpy array
             boxes after calibration
         """
@@ -325,7 +325,7 @@ class MtcnnDetector(object):
             #抠图
             tmp[dy[i]:edy[i] + 1, dx[i]:edx[i] + 1, :] = im[y[i]:ey[i] + 1, x[i]:ex[i] + 1, :]
             # 再把抠出来的图 resize 成 24 * 24
-            cropped_ims[i, :, :, :] = (cv2.resize(tmp, (24, 24))-127.5) / 128
+            cropped_ims[i, :, :, :] = (cv2.resize(tmp, (24, 24))-127.5) / 128 #归一化. RGB 0 ~ 255 归一化到 -1 ~ 1范围
         #cls_scores : num_data*2
         #reg: num_data*4
         #landmark: num_data*10
@@ -334,7 +334,7 @@ class MtcnnDetector(object):
         cls_scores = cls_scores[:,1]
         # 只有大于 RNET threshold才会被认为是人脸 送给ONET
         keep_inds = np.where(cls_scores > self.thresh[1])[0]
-        # 组织一下
+        # 组织一下  [x1, y1, x2, y2, P, x1*, y1*, x2*, y2*], p表示概率， x1* y1* 表示如何调整
         if len(keep_inds) > 0:
             boxes = dets[keep_inds]
             boxes[:, 4] = cls_scores[keep_inds]
@@ -417,6 +417,7 @@ class MtcnnDetector(object):
         t1 = 0
         if self.pnet_detector:
             #这里调用detect_pnet的时候，并没有做图像金字塔。。。但实际上图像金字塔是在detect_pnet里做的
+            # boxes_c 表示可能包含人脸的bounding boxes， 这个要传递给下面的 rnet
             boxes, boxes_c,_ = self.detect_pnet(img)
             if boxes_c is None:
                 return np.array([]),np.array([])

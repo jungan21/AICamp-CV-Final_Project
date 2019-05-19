@@ -2,7 +2,7 @@
 import numpy as np
 import tensorflow as tf
 
-
+# FcnDetector 是给P net 用的
 class FcnDetector(object):
     #net_factory: which net
     #model_path: where the params'file is
@@ -39,7 +39,7 @@ class FcnDetector(object):
     def predict(self, databatch):
         height, width, _ = databatch.shape
         # print(height, width)
-        # 直接把读取的batch 图片 扔给 model
+        # 直接把读取的batch 里原始图像金字塔图片 扔给 model
         # 下面两个返回值 都是二维数组
         cls_prob, bbox_pred = self.sess.run([self.cls_prob, self.bbox_pred],
                                                            feed_dict={self.image_op: databatch, self.width_op: width,

@@ -2,7 +2,7 @@ import tensorflow as tf
 import numpy as np
 
 
-
+# 该Detector 是给R net 和 O net 用的
 class Detector(object):
     #net_factory:rnet or onet
     #datasize:24 or 48
